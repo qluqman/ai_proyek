@@ -159,6 +159,7 @@
             </div>
             <div class="btn-group">
                 <button id="startVision" class="btn btn-blue">🚀 Aktifkan Kamera AI</button>
+                <button id="stopVision" class="btn btn-red" style="display:none; grid-column: span 2;">🛑 Hentikan Kamera</button>
             </div>
         </div>
 
@@ -191,43 +192,62 @@
         }
 
         // --- AI VISION LOGIC ---
-        let model;
-        const video = document.getElementById('webcam');
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+        // Tambahkan dua variabel kontrol ini di atas
+let streamInstance = null; 
+let isDetecting = false;
 
-        async function initVision() {
-            addLog("Memuat Model Vision (Mohon Tunggu)...");
-            model = await cocoSsd.load();
-            addLog("Model Vision Siap!");
-        }
-        initVision();
+const btnStartVis = document.getElementById('startVision');
+const btnStopVis = document.getElementById('stopVision');
 
-        document.getElementById('startVision').onclick = async () => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                video.srcObject = stream;
-                document.getElementById('startVision').style.display = "none";
-                addLog("Kamera Aktif. Memulai Deteksi...");
-                detectFrame();
-            } catch (err) { addLog("Error Kamera: " + err.message); }
-        };
+// MODIFIKASI FUNGSI START
+btnStartVis.onclick = async () => {
+    try {
+        streamInstance = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment" } 
+        });
+        video.srcObject = streamInstance;
+        
+        isDetecting = true;
+        btnStartVis.style.display = "none";
+        btnStopVis.style.display = "block";
+        
+        addLog("Kamera Aktif. Memulai Deteksi...");
+        detectFrame();
+    } catch (err) { addLog("Error Kamera: " + err.message); }
+};
 
-        function detectFrame() {
-            model.detect(video).then(predictions => {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                predictions.forEach(p => {
-                    ctx.strokeStyle = "#00FF00"; ctx.lineWidth = 3;
-                    ctx.strokeRect(...p.bbox);
-                    ctx.fillStyle = "#00FF00"; ctx.font = "18px Arial";
-                    ctx.fillText(`${p.class} ${Math.round(p.score*100)}%`, p.bbox[0], p.bbox[1]-5);
-                });
-                requestAnimationFrame(detectFrame);
-            });
-        }
+// TAMBAHKAN FUNGSI STOP BARU
+btnStopVis.onclick = () => {
+    isDetecting = false;
+    if (streamInstance) {
+        streamInstance.getTracks().forEach(track => track.stop()); // Matikan Hardware Kamera
+        video.srcObject = null;
+    }
+    ctx.clearRect(0, 0, canvas.width, canvas.height); // Bersihkan Canvas
+    
+    btnStopVis.style.display = "none";
+    btnStartVis.style.display = "block";
+    addLog("Kamera berhasil dimatikan.");
+};
 
+// MODIFIKASI FUNGSI DETECT agar bisa berhenti
+function detectFrame() {
+    if (!isDetecting) return; // Jika stop ditekan, hentikan loop deteksi
+
+    model.detect(video).then(predictions => {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        predictions.forEach(p => {
+            ctx.strokeStyle = "#00FF00"; ctx.lineWidth = 3;
+            ctx.strokeRect(...p.bbox);
+            ctx.fillStyle = "#00FF00"; ctx.font = "18px Arial";
+            ctx.fillText(`${p.class} ${Math.round(p.score*100)}%`, p.bbox[0], p.bbox[1]-5);
+        });
+        
+        if (isDetecting) requestAnimationFrame(detectFrame);
+    });
+}
         // --- AI SPEECH LOGIC ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
