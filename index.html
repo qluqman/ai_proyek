@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Dashboard - Deep Learning Exhibition</title>
+    <title>AI Hub - Deep Learning Exhibition</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
@@ -26,17 +26,17 @@
             min-height: 100vh;
         }
 
-        /* HEADER & LOGO AREA */
+        /* HEADER AREA (Bisa diisi Logo & Judul) */
         .header-section {
-            width: 100%;
+            width: 90%;
             max-width: 800px;
             background: white;
-            padding: 30px;
+            padding: 25px;
             margin: 20px 0;
             border-radius: 20px;
             box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
             text-align: center;
-            border: 2px dashed #cbd5e1; /* Area Kosong untuk Logo */
+            border: 2px dashed #cbd5e1;
         }
 
         .header-section h1 { margin: 10px 0; color: var(--dark); font-size: 1.8rem; }
@@ -90,13 +90,13 @@
             overflow: hidden;
             line-height: 0;
         }
-        video { width: 100%; height: auto; }
+        video { width: 100%; height: auto; transform: scaleX(1); }
         canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
         /* SPEECH STYLES */
         #result-box {
             width: 100%;
-            min-height: 150px;
+            min-height: 120px;
             background: #f1f5f9;
             border-radius: 15px;
             padding: 20px;
@@ -104,6 +104,7 @@
             font-size: 1.2rem;
             border: 1px solid #e2e8f0;
             box-sizing: border-box;
+            text-align: left;
         }
 
         /* BUTTONS */
@@ -118,21 +119,23 @@
             transition: 0.2s;
         }
         .btn:active { transform: scale(0.95); }
+        .btn:disabled { background: #cbd5e1; cursor: not-allowed; }
         .btn-blue { background: var(--primary); grid-column: span 2; }
-        .btn-red { background: #ef4444; }
-        .btn-purple { background: var(--secondary); }
+        .btn-red { background: #ef4444; grid-column: span 2; }
+        .btn-purple { background: var(--secondary); grid-column: span 2; }
 
         /* LOG SYSTEM */
         .status-log {
             margin-top: 20px;
-            padding: 12px;
+            padding: 15px;
             background: #0f172a;
-            color: #10b981;
-            border-radius: 10px;
-            font-family: monospace;
-            font-size: 0.8rem;
+            color: #34d399;
+            border-radius: 12px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
             text-align: left;
-            max-height: 100px;
+            min-height: 50px;
+            max-height: 120px;
             overflow-y: auto;
         }
     </style>
@@ -141,7 +144,7 @@
 
     <div class="header-section">
         <h1>AI DEEP LEARNING HUB</h1>
-        <p>Eksperimen Pembelajaran Masa Depan - [Nama Sekolah Anda]</p>
+        <p>Eksperimen Pembelajaran Masa Depan - [Nama Sekolah]</p>
     </div>
 
     <div class="tab-container">
@@ -152,139 +155,163 @@
     <div class="main-card">
         
         <div id="vision" class="ai-content active">
-            <h3 style="margin-top:0;">Object Detection (On-Device)</h3>
+            <h3 style="margin-top:0; color: var(--primary);">Object Detection</h3>
             <div class="video-wrapper">
                 <video id="webcam" autoplay muted playsinline></video>
                 <canvas id="canvas"></canvas>
             </div>
             <div class="btn-group">
                 <button id="startVision" class="btn btn-blue">🚀 Aktifkan Kamera AI</button>
-                <button id="stopVision" class="btn btn-red" style="display:none; grid-column: span 2;">🛑 Hentikan Kamera</button>
+                <button id="stopVision" class="btn btn-red" style="display:none;">🛑 Hentikan Kamera</button>
             </div>
         </div>
 
         <div id="speech" class="ai-content">
-            <h3 style="margin-top:0;">Speech Recognition & Synthesis</h3>
-            <div id="result-box">Bicaralah dalam Bahasa Inggris...</div>
+            <h3 style="margin-top:0; color: var(--secondary);">Speech to Text (English)</h3>
+            <div id="result-box">Klik tombol di bawah untuk mulai bicara...</div>
             <div class="btn-group">
-                <button id="startSpeech" class="btn btn-blue" style="grid-column: span 2;">🎤 Start Listening</button>
-                <button id="stopSpeech" class="btn btn-red" disabled>🛑 Stop</button>
-                <button id="speakBack" class="btn btn-purple" disabled>🔊 AI Speak Back</button>
+                <button id="startSpeech" class="btn btn-blue">🎤 Start Listening</button>
+                <button id="stopSpeech" class="btn btn-red" style="display:none;">🛑 Stop Listening</button>
+                <button id="speakBack" class="btn btn-purple" disabled style="margin-top:10px;">🔊 AI Speak Back</button>
             </div>
         </div>
 
-        <div class="status-log" id="logBox">> System Ready. Membutuhkan akses Kamera & Mikrofon.</div>
+        <div class="status-log" id="logBox">> System Ready.</div>
     </div>
 
     <script>
-        // TAB LOGIC
-        function openTab(tabName) {
-            document.querySelectorAll('.ai-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById(tabName).classList.add('active');
-            event.currentTarget.classList.add('active');
-            addLog("Berpindah ke mode: " + tabName);
+        const logBox = document.getElementById('logBox');
+        let visionModel;
+        let visionStream = null;
+        let isVisionActive = false;
+
+        function addLog(msg, clear = false) {
+            if (clear) logBox.innerHTML = "";
+            const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            logBox.innerHTML = `<div><span style="color:#64748b">[${time}]</span> > ${msg}</div>` + logBox.innerHTML;
         }
 
-        function addLog(msg) {
-            const logBox = document.getElementById('logBox');
-            logBox.innerHTML = `> ${msg}<br>` + logBox.innerHTML;
+        // TAB NAVIGATION
+        function openTab(tabName) {
+            // Bersihkan konten tab
+            document.querySelectorAll('.ai-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            
+            // Aktifkan tab terpilih
+            document.getElementById(tabName).classList.add('active');
+            event.currentTarget.classList.add('active');
+            
+            // BERSIHKAN LOG SAAT BERPINDAH MENU
+            addLog(`Berpindah ke mode ${tabName.toUpperCase()}. Log dibersihkan.`, true);
+            
+            // Jika pindah tab, otomatis matikan kamera jika menyala
+            if (tabName !== 'vision' && isVisionActive) stopVision();
         }
 
         // --- AI VISION LOGIC ---
-        // Tambahkan dua variabel kontrol ini di atas
-let streamInstance = null; 
-let isDetecting = false;
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const btnStartVis = document.getElementById('startVision');
+        const btnStopVis = document.getElementById('stopVision');
 
-const btnStartVis = document.getElementById('startVision');
-const btnStopVis = document.getElementById('stopVision');
+        async function loadVisionModel() {
+            addLog("Mendownload model Deep Learning...");
+            visionModel = await cocoSsd.load();
+            addLog("Model Vision siap digunakan.");
+        }
+        loadVisionModel();
 
-// MODIFIKASI FUNGSI START
-btnStartVis.onclick = async () => {
-    try {
-        streamInstance = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment" } 
-        });
-        video.srcObject = streamInstance;
-        
-        isDetecting = true;
-        btnStartVis.style.display = "none";
-        btnStopVis.style.display = "block";
-        
-        addLog("Kamera Aktif. Memulai Deteksi...");
-        detectFrame();
-    } catch (err) { addLog("Error Kamera: " + err.message); }
-};
+        btnStartVis.onclick = async () => {
+            try {
+                visionStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: "environment" } 
+                });
+                video.srcObject = visionStream;
+                isVisionActive = true;
+                btnStartVis.style.display = "none";
+                btnStopVis.style.display = "block";
+                addLog("Kamera Aktif. Memulai proses deteksi...");
+                detectObjects();
+            } catch (err) {
+                addLog("Error Kamera: " + err.message);
+            }
+        };
 
-// TAMBAHKAN FUNGSI STOP BARU
-btnStopVis.onclick = () => {
-    isDetecting = false;
-    if (streamInstance) {
-        streamInstance.getTracks().forEach(track => track.stop()); // Matikan Hardware Kamera
-        video.srcObject = null;
-    }
-    ctx.clearRect(0, 0, canvas.width, canvas.height); // Bersihkan Canvas
-    
-    btnStopVis.style.display = "none";
-    btnStartVis.style.display = "block";
-    addLog("Kamera berhasil dimatikan.");
-};
+        function stopVision() {
+            isVisionActive = false;
+            if (visionStream) {
+                visionStream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            btnStopVis.style.display = "none";
+            btnStartVis.style.display = "block";
+            addLog("Kamera dimatikan.");
+        }
+        btnStopVis.onclick = stopVision;
 
-// MODIFIKASI FUNGSI DETECT agar bisa berhenti
-function detectFrame() {
-    if (!isDetecting) return; // Jika stop ditekan, hentikan loop deteksi
+        function detectObjects() {
+            if (!isVisionActive) return;
+            visionModel.detect(video).then(predictions => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                predictions.forEach(p => {
+                    ctx.strokeStyle = "#00FF00";
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(...p.bbox);
+                    ctx.fillStyle = "#00FF00";
+                    ctx.font = "bold 18px Arial";
+                    ctx.fillText(`${p.class} ${Math.round(p.score*100)}%`, p.bbox[0], p.bbox[1]-5);
+                });
+                if (isVisionActive) requestAnimationFrame(detectObjects);
+            });
+        }
 
-    model.detect(video).then(predictions => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        predictions.forEach(p => {
-            ctx.strokeStyle = "#00FF00"; ctx.lineWidth = 3;
-            ctx.strokeRect(...p.bbox);
-            ctx.fillStyle = "#00FF00"; ctx.font = "18px Arial";
-            ctx.fillText(`${p.class} ${Math.round(p.score*100)}%`, p.bbox[0], p.bbox[1]-5);
-        });
-        
-        if (isDetecting) requestAnimationFrame(detectFrame);
-    });
-}
         // --- AI SPEECH LOGIC ---
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         const recognition = new SpeechRecognition();
         recognition.lang = 'en-US';
         recognition.interimResults = true;
-        let finalTxt = "";
+        let finalTranscript = "";
 
-        document.getElementById('startSpeech').onclick = () => {
+        const btnStartSpeech = document.getElementById('startSpeech');
+        const btnStopSpeech = document.getElementById('stopSpeech');
+        const resultBox = document.getElementById('result-box');
+
+        btnStartSpeech.onclick = () => {
             recognition.start();
-            addLog("Mendengarkan suara...");
-            document.getElementById('startSpeech').disabled = true;
-            document.getElementById('stopSpeech').disabled = false;
+            btnStartSpeech.style.display = "none";
+            btnStopSpeech.style.display = "block";
+            addLog("Mendengarkan... Bicaralah dalam Bahasa Inggris.");
         };
 
         recognition.onresult = (event) => {
             let interim = "";
             for (let i = event.resultIndex; i < event.results.length; ++i) {
-                if (event.results[i].isFinal) finalTxt = event.results[i][0].transcript;
+                if (event.results[i].isFinal) finalTranscript = event.results[i][0].transcript;
                 else interim += event.results[i][0].transcript;
             }
-            document.getElementById('result-box').innerHTML = `<b>${finalTxt}</b> <i style="color:gray">${interim}</i>`;
-            if(finalTxt) document.getElementById('speakBack').disabled = false;
+            resultBox.innerHTML = `<strong>${finalTranscript}</strong> <span style="color:#94a3b8">${interim}</span>`;
+            if(finalTranscript) document.getElementById('speakBack').disabled = false;
         };
+
+        btnStopSpeech.onclick = () => recognition.stop();
 
         recognition.onend = () => {
-            document.getElementById('startSpeech').disabled = false;
-            document.getElementById('stopSpeech').disabled = true;
-            addLog("Sesi bicara selesai.");
+            btnStartSpeech.style.display = "block";
+            btnStopSpeech.style.display = "none";
+            addLog("Sesi bicara berakhir.");
         };
 
-        document.getElementById('stopSpeech').onclick = () => recognition.stop();
-
         document.getElementById('speakBack').onclick = () => {
-            const utter = new SpeechSynthesisUtterance(finalTxt);
-            utter.lang = 'en-US';
-            window.speechSynthesis.speak(utter);
-            addLog("AI membacakan kembali...");
+            if (finalTranscript) {
+                const utter = new SpeechSynthesisUtterance(finalTranscript);
+                utter.lang = 'en-US';
+                window.speechSynthesis.speak(utter);
+                addLog("AI membacakan kembali teks.");
+            }
         };
     </script>
 </body>
