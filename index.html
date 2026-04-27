@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Dashboard - Deep Learning Exhibition</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+    <style>
+        :root {
+            --primary: #2563eb;
+            --secondary: #7c3aed;
+            --dark: #1e293b;
+            --bg: #f8fafc;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        /* HEADER & LOGO AREA */
+        .header-section {
+            width: 100%;
+            max-width: 800px;
+            background: white;
+            padding: 30px;
+            margin: 20px 0;
+            border-radius: 20px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            text-align: center;
+            border: 2px dashed #cbd5e1; /* Area Kosong untuk Logo */
+        }
+
+        .header-section h1 { margin: 10px 0; color: var(--dark); font-size: 1.8rem; }
+        .header-section p { margin: 0; color: #64748b; }
+
+        /* TAB NAVIGATION */
+        .tab-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            font-weight: 600;
+            background: #e2e8f0;
+            color: #64748b;
+            transition: 0.3s;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.3);
+        }
+
+        /* CONTENT AREA */
+        .main-card {
+            background: white;
+            width: 95%;
+            max-width: 800px;
+            border-radius: 24px;
+            padding: 25px;
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1);
+            box-sizing: border-box;
+            margin-bottom: 40px;
+        }
+
+        .ai-content { display: none; }
+        .ai-content.active { display: block; }
+
+        /* VISION STYLES */
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            line-height: 0;
+        }
+        video { width: 100%; height: auto; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        /* SPEECH STYLES */
+        #result-box {
+            width: 100%;
+            min-height: 150px;
+            background: #f1f5f9;
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            font-size: 1.2rem;
+            border: 1px solid #e2e8f0;
+            box-sizing: border-box;
+        }
+
+        /* BUTTONS */
+        .btn-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .btn {
+            padding: 15px;
+            border: none;
+            border-radius: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            color: white;
+            transition: 0.2s;
+        }
+        .btn:active { transform: scale(0.95); }
+        .btn-blue { background: var(--primary); grid-column: span 2; }
+        .btn-red { background: #ef4444; }
+        .btn-purple { background: var(--secondary); }
+
+        /* LOG SYSTEM */
+        .status-log {
+            margin-top: 20px;
+            padding: 12px;
+            background: #0f172a;
+            color: #10b981;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 0.8rem;
+            text-align: left;
+            max-height: 100px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-section">
+        <h1>AI DEEP LEARNING HUB</h1>
+        <p>Eksperimen Pembelajaran Masa Depan - [Nama Sekolah Anda]</p>
+    </div>
+
+    <div class="tab-container">
+        <button class="tab-btn active" onclick="openTab('vision')">👁️ AI Vision</button>
+        <button class="tab-btn" onclick="openTab('speech')">🎤 AI Speech</button>
+    </div>
+
+    <div class="main-card">
+        
+        <div id="vision" class="ai-content active">
+            <h3 style="margin-top:0;">Object Detection (On-Device)</h3>
+            <div class="video-wrapper">
+                <video id="webcam" autoplay muted playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+            <div class="btn-group">
+                <button id="startVision" class="btn btn-blue">🚀 Aktifkan Kamera AI</button>
+            </div>
+        </div>
+
+        <div id="speech" class="ai-content">
+            <h3 style="margin-top:0;">Speech Recognition & Synthesis</h3>
+            <div id="result-box">Bicaralah dalam Bahasa Inggris...</div>
+            <div class="btn-group">
+                <button id="startSpeech" class="btn btn-blue" style="grid-column: span 2;">🎤 Start Listening</button>
+                <button id="stopSpeech" class="btn btn-red" disabled>🛑 Stop</button>
+                <button id="speakBack" class="btn btn-purple" disabled>🔊 AI Speak Back</button>
+            </div>
+        </div>
+
+        <div class="status-log" id="logBox">> System Ready. Membutuhkan akses Kamera & Mikrofon.</div>
+    </div>
+
+    <script>
+        // TAB LOGIC
+        function openTab(tabName) {
+            document.querySelectorAll('.ai-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(tabName).classList.add('active');
+            event.currentTarget.classList.add('active');
+            addLog("Berpindah ke mode: " + tabName);
+        }
+
+        function addLog(msg) {
+            const logBox = document.getElementById('logBox');
+            logBox.innerHTML = `> ${msg}<br>` + logBox.innerHTML;
+        }
+
+        // --- AI VISION LOGIC ---
+        let model;
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        async function initVision() {
+            addLog("Memuat Model Vision (Mohon Tunggu)...");
+            model = await cocoSsd.load();
+            addLog("Model Vision Siap!");
+        }
+        initVision();
+
+        document.getElementById('startVision').onclick = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+                video.srcObject = stream;
+                document.getElementById('startVision').style.display = "none";
+                addLog("Kamera Aktif. Memulai Deteksi...");
+                detectFrame();
+            } catch (err) { addLog("Error Kamera: " + err.message); }
+        };
+
+        function detectFrame() {
+            model.detect(video).then(predictions => {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                predictions.forEach(p => {
+                    ctx.strokeStyle = "#00FF00"; ctx.lineWidth = 3;
+                    ctx.strokeRect(...p.bbox);
+                    ctx.fillStyle = "#00FF00"; ctx.font = "18px Arial";
+                    ctx.fillText(`${p.class} ${Math.round(p.score*100)}%`, p.bbox[0], p.bbox[1]-5);
+                });
+                requestAnimationFrame(detectFrame);
+            });
+        }
+
+        // --- AI SPEECH LOGIC ---
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = true;
+        let finalTxt = "";
+
+        document.getElementById('startSpeech').onclick = () => {
+            recognition.start();
+            addLog("Mendengarkan suara...");
+            document.getElementById('startSpeech').disabled = true;
+            document.getElementById('stopSpeech').disabled = false;
+        };
+
+        recognition.onresult = (event) => {
+            let interim = "";
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) finalTxt = event.results[i][0].transcript;
+                else interim += event.results[i][0].transcript;
+            }
+            document.getElementById('result-box').innerHTML = `<b>${finalTxt}</b> <i style="color:gray">${interim}</i>`;
+            if(finalTxt) document.getElementById('speakBack').disabled = false;
+        };
+
+        recognition.onend = () => {
+            document.getElementById('startSpeech').disabled = false;
+            document.getElementById('stopSpeech').disabled = true;
+            addLog("Sesi bicara selesai.");
+        };
+
+        document.getElementById('stopSpeech').onclick = () => recognition.stop();
+
+        document.getElementById('speakBack').onclick = () => {
+            const utter = new SpeechSynthesisUtterance(finalTxt);
+            utter.lang = 'en-US';
+            window.speechSynthesis.speak(utter);
+            addLog("AI membacakan kembali...");
+        };
+    </script>
+</body>
+</html>
