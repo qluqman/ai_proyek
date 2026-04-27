@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Learning Vision - Offline Demo</title>
+    
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
+
+    <style>
+        :root { --primary: #2563eb; --bg: #f1f5f9; }
+        body { font-family: sans-serif; background: var(--bg); margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; }
+
+        /* AREA KOSONG UNTUK LOGO & JUDUL */
+        .header-custom {
+            width: 100%; max-width: 640px; min-height: 120px; background: white;
+            border: 2px dashed #cbd5e1; border-radius: 15px; margin-bottom: 15px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+        }
+
+        .video-container { position: relative; width: 100%; max-width: 640px; background: #000; border-radius: 15px; overflow: hidden; line-height: 0; }
+        video { width: 100%; height: auto; }
+        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        .controls { width: 100%; max-width: 640px; margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { padding: 15px; font-weight: bold; border: none; border-radius: 10px; cursor: pointer; color: white; transition: 0.3s; }
+        .btn-start { background: var(--primary); grid-column: span 2; }
+        .btn-switch { background: #64748b; } /* Untuk ganti kamera di HP */
+        
+        .status-box {
+            width: 100%; max-width: 640px; margin-top: 15px; padding: 10px; 
+            background: #1e293b; color: #34d399; border-radius: 8px; font-family: monospace; font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header-custom">
+        <h2 style="margin:0;">[JUDUL PAMERAN ANDA]</h2>
+        <p style="margin:5px 0; color: #64748b;">[NAMA SEKOLAH ANDA]</p>
+    </div>
+
+    <div class="video-container">
+        <video id="webcam" autoplay muted playsinline></video>
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="controls">
+        <button id="startBtn" class="btn-start">🚀 AKTIFKAN AI VISION</button>
+        <button id="switchBtn" class="btn-switch" style="display:none;">🔄 GANTI KAMERA</button>
+    </div>
+
+    <div class="status-box" id="status">
+        > System: Siap. Tekan tombol untuk memuat model...
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const status = document.getElementById('status');
+        const startBtn = document.getElementById('startBtn');
+        const switchBtn = document.getElementById('switchBtn');
+
+        let model = undefined;
+        let currentFacingMode = "environment"; // Kamera belakang default untuk HP
+
+        function addLog(msg) {
+            status.innerText = `> System: ${msg}`;
+        }
+
+        // 1. Memuat Model AI
+        async function loadModel() {
+            addLog("Sedang mendownload otak AI (Model)...");
+            model = await cocoSsd.load();
+            addLog("Model Berhasil Dimuat! Silakan mulai kamera.");
+            startBtn.innerText = "📷 MULAI DETEKSI";
+        }
+
+        loadModel();
+
+        // 2. Fungsi Kamera
+        async function setupCamera() {
+            const constraints = {
+                video: { facingMode: currentFacingMode }
+            };
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                if (/Mobi|Android/i.test(navigator.userAgent)) {
+                    switchBtn.style.display = "block"; // Munculkan tombol ganti kamera hanya di HP
+                }
+                return new Promise((resolve) => {
+                    video.onloadedmetadata = () => { resolve(video); };
+                });
+            } catch (e) {
+                addLog("Gagal akses kamera: " + e.message);
+            }
+        }
+
+        // 3. Prediksi Real-time (Deep Learning)
+        async function detectFrame() {
+            model.detect(video).then(predictions => {
+                renderPredictions(predictions);
+                requestAnimationFrame(detectFrame);
+            });
+        }
+
+        function renderPredictions(predictions) {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            predictions.forEach(prediction => {
+                const [x, y, width, height] = prediction.bbox;
+                
+                // Gambar Kotak
+                ctx.strokeStyle = "#00FF00";
+                ctx.lineWidth = 4;
+                ctx.strokeRect(x, y, width, height);
+
+                // Gambar Label
+                ctx.fillStyle = "#00FF00";
+                ctx.font = "18px Arial";
+                const text = `${prediction.class} (${Math.round(prediction.score * 100)}%)`;
+                ctx.fillText(text, x, y > 10 ? y - 5 : 10);
+            });
+        }
+
+        startBtn.onclick = async () => {
+            if (!model) return addLog("Tunggu, model belum siap...");
+            await setupCamera();
+            addLog("AI Sedang Berpikir (Scanning)...");
+            detectFrame();
+            startBtn.style.display = "none";
+        };
+
+        switchBtn.onclick = async () => {
+            currentFacingMode = currentFacingMode === "environment" ? "user" : "environment";
+            await setupCamera();
+        };
+    </script>
+</body>
+</html>

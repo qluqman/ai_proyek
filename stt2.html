@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Learning Demo - Debug Mode</title>
+    <style>
+        :root { --primary: #2563eb; --secondary: #7c3aed; --success: #059669; --danger: #dc2626; --bg: #f8fafc; }
+        body { font-family: sans-serif; background: var(--bg); margin: 0; padding: 15px; display: flex; flex-direction: column; align-items: center; }
+        
+        /* HEADER AREA */
+        .header-edit-area {
+            width: 100%; max-width: 600px; min-height: 100px; background: white;
+            border: 2px dashed #cbd5e1; border-radius: 15px; margin-bottom: 15px;
+            display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center;
+        }
+
+        .app-container { background: white; padding: 20px; border-radius: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); width: 100%; max-width: 600px; box-sizing: border-box; }
+        
+        #result { 
+            width: 100%; min-height: 120px; background: #f1f5f9; border-radius: 12px; 
+            padding: 15px; margin: 15px 0; font-size: 1.1rem; color: #1e293b; border: 1px solid #e2e8f0; 
+            box-sizing: border-box; overflow-y: auto;
+        }
+
+        .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { padding: 15px; font-weight: bold; border: none; border-radius: 10px; cursor: pointer; color: white; }
+        .btn-start { background: var(--primary); grid-column: span 2; }
+        .btn-stop { background: var(--danger); }
+        .btn-speak { background: var(--secondary); }
+        button:disabled { background: #cbd5e1; }
+
+        /* LOG STATUS SYSTEM */
+        .status-box {
+            margin-top: 20px; padding: 10px; background: #1e293b; color: #34d399; 
+            border-radius: 8px; font-family: monospace; font-size: 0.8rem; width: 100%; text-align: left;
+        }
+        .log-entry { margin-bottom: 4px; border-bottom: 1px solid #334155; padding-bottom: 2px; }
+    </style>
+</head>
+<body>
+
+    <div class="header-edit-area">
+        <h2 style="margin:0;">[JUDUL PAMERAN]</h2>
+        <p style="margin:5px 0;">[NAMA SEKOLAH]</p>
+    </div>
+
+    <div class="app-container">
+        <div id="result">Menunggu perintah suara...</div>
+        
+        <div class="controls">
+            <button id="startBtn" class="btn-start">🎤 Start Listening</button>
+            <button id="stopBtn" class="btn-stop" disabled>🛑 Stop</button>
+            <button id="speakBtn" class="btn-speak" disabled>🔊 Speak Back</button>
+        </div>
+
+        <div class="status-box" id="logBox">
+            <div class="log-entry">> System Ready. Waiting for user...</div>
+        </div>
+    </div>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const speakBtn = document.getElementById('speakBtn');
+        const resultDiv = document.getElementById('result');
+        const logBox = document.getElementById('logBox');
+
+        function addLog(msg) {
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            entry.innerText = `> ${msg}`;
+            logBox.prepend(entry);
+        }
+
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        
+        if (!SpeechRecognition) {
+            addLog("ERROR: Browser tidak mendukung Speech Recognition.");
+            resultDiv.innerText = "Browser tidak mendukung. Gunakan Google Chrome.";
+        } else {
+            const recognition = new SpeechRecognition();
+            recognition.lang = 'en-US';
+            recognition.interimResults = true;
+            recognition.continuous = true;
+
+            startBtn.onclick = () => {
+                try {
+                    recognition.start();
+                    addLog("Meminta izin mikrofon...");
+                } catch (e) {
+                    addLog("Error: " + e.message);
+                }
+            };
+
+            recognition.onstart = () => {
+                addLog("Mikrofon AKTIF. Mendengarkan suara...");
+                startBtn.disabled = true;
+                stopBtn.disabled = false;
+            };
+
+            recognition.onspeechstart = () => {
+                addLog("Suara terdeteksi! Mengolah data...");
+            };
+
+            recognition.onresult = (event) => {
+                addLog("Mengupdate database teks...");
+                let interimTranscript = '';
+                let finalTranscript = '';
+
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    if (event.results[i].isFinal) {
+                        finalTranscript += event.results[i][0].transcript;
+                        addLog("Kalimat final diterima.");
+                    } else {
+                        interimTranscript += event.results[i][0].transcript;
+                    }
+                }
+                resultDiv.innerHTML = `<span style="color:#1e293b">${finalTranscript}</span><span style="color:#94a3b8">${interimTranscript}</span>`;
+                if(finalTranscript) speakBtn.disabled = false;
+            };
+
+            recognition.onerror = (event) => {
+                addLog("ERROR AI: " + event.error);
+                if(event.error === 'not-allowed') addLog("Izin mikrofon ditolak browser.");
+            };
+
+            recognition.onend = () => {
+                addLog("Sesi mendengarkan berhenti.");
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+            };
+
+            stopBtn.onclick = () => {
+                addLog("Menghentikan paksa...");
+                recognition.stop();
+            };
+        }
+
+        // Fitur TTS (Speak Back)
+        speakBtn.onclick = () => {
+            const text = resultDiv.innerText;
+            if (text) {
+                addLog("Menyiapkan suara AI...");
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'en-US';
+                utter.onstart = () => addLog("AI sedang berbicara...");
+                utter.onend = () => addLog("AI selesai berbicara.");
+                window.speechSynthesis.speak(utter);
+            }
+        };
+    </script>
+</body>
+</html>
